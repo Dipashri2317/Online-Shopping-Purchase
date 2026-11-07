@@ -209,7 +209,7 @@ An interactive web application was developed using Streamlit to demonstrate the 
 
 **Streamlit App Link:**
 
-[PASTE YOUR DEPLOYED STREAMLIT APP LINK HERE]
+https://online-shopping-purchase-bits.streamlit.app/
 
 The application is deployed using Streamlit Community Cloud.
 
