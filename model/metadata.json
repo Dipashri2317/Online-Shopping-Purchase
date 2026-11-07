@@ -1,0 +1,60 @@
+{
+    "dataset": "UCI Online Shoppers Purchasing Intention Dataset",
+    "target_column": "Revenue",
+    "target_mapping": {
+        "0": "No Purchase",
+        "1": "Purchase"
+    },
+    "features": [
+        "Administrative",
+        "Administrative_Duration",
+        "Informational",
+        "Informational_Duration",
+        "ProductRelated",
+        "ProductRelated_Duration",
+        "BounceRates",
+        "ExitRates",
+        "PageValues",
+        "SpecialDay",
+        "OperatingSystems",
+        "Browser",
+        "Region",
+        "TrafficType",
+        "Month",
+        "VisitorType",
+        "Weekend"
+    ],
+    "categorical_features": [
+        "Month",
+        "VisitorType",
+        "OperatingSystems",
+        "Browser",
+        "Region",
+        "TrafficType",
+        "Weekend"
+    ],
+    "numeric_features": [
+        "Administrative",
+        "Administrative_Duration",
+        "Informational",
+        "Informational_Duration",
+        "ProductRelated",
+        "ProductRelated_Duration",
+        "BounceRates",
+        "ExitRates",
+        "PageValues",
+        "SpecialDay"
+    ],
+    "models": [
+        "Logistic Regression",
+        "Decision Tree",
+        "KNN",
+        "Gaussian Naive Bayes",
+        "SVM"
+    ],
+    "test_size": 0.2,
+    "random_state": 42,
+    "rows_after_duplicate_removal": 12205,
+    "training_rows": 9764,
+    "testing_rows": 2441
+}

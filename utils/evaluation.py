@@ -1,3 +1,5 @@
+import numpy as np
+
 from sklearn.metrics import (
     accuracy_score,
     roc_auc_score,
@@ -8,36 +10,53 @@ from sklearn.metrics import (
 )
 
 
-# ============================================================
-# GET MODEL SCORES
-# ============================================================
-
 def get_model_scores(model, X):
 
     if hasattr(model, "predict_proba"):
-        probabilities = model.predict_proba(X)
-        return probabilities[:, 1]
+
+        return model.predict_proba(X)[:, 1]
 
     if hasattr(model, "decision_function"):
+
         return model.decision_function(X)
 
-    return model.predict(X)
+    return None
 
 
-# ============================================================
-# EVALUATE MODEL
-# ============================================================
-
-def evaluate_model(model, X_test, y_test):
+def evaluate_model(
+    model,
+    X_test,
+    y_test
+):
 
     predictions = model.predict(X_test)
 
-    scores = get_model_scores(model, X_test)
+    scores = get_model_scores(
+        model,
+        X_test
+    )
+
+    auc_value = (
+
+        roc_auc_score(
+            y_test,
+            scores
+        )
+
+        if scores is not None
+        and len(np.unique(y_test)) == 2
+
+        else np.nan
+    )
 
     metrics = {
-        "Accuracy": accuracy_score(y_test, predictions),
 
-        "AUC": roc_auc_score(y_test, scores),
+        "Accuracy": accuracy_score(
+            y_test,
+            predictions
+        ),
+
+        "AUC": auc_value,
 
         "Precision": precision_score(
             y_test,

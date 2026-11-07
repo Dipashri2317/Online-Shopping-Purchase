@@ -1,88 +1,138 @@
-
-# ============================================================
-# ONLINE SHOPPERS PURCHASE PREDICTION
-# Main Streamlit Application
-# ============================================================
-
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
-from sklearn.metrics import (
-    confusion_matrix,
-    ConfusionMatrixDisplay,
-    classification_report,
-    roc_curve
-)
-
-from config import (
-    FEATURE_COLUMNS,
-    TARGET_COLUMN,
-    METRIC_NAMES
-)
-
-from utils.styles import (
+from components.styles import (
     apply_custom_styles,
     render_header,
     render_footer
 )
 
-from utils.data_loader import (
-    convert_target_values,
-    load_default_dataset,
-    create_sample_dataset,
-    validate_dataset
+from components.charts import (
+    create_class_distribution_chart,
+    create_model_comparison_chart,
+    create_confusion_matrix_chart,
+    create_roc_curve_chart
 )
 
-from utils.model_utils import (
+from components.dashboard import (
+    create_classification_report
+)
+
+from utils.model_loader import (
     load_models,
-    evaluate_model
+    load_metadata
 )
 
+from utils.data_handler import (
+    load_default_dataset,
+    validate_dataset,
+    convert_target_values
+)
 
-# ============================================================
-# 1. PAGE CONFIGURATION
-# ============================================================
+from utils.evaluation import evaluate_model
+
+
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
 
 st.set_page_config(
+
     page_title="Online Shoppers Purchase Prediction",
+
     page_icon="🛒",
+
     layout="wide"
 )
 
 
-# ============================================================
-# 2. APPLY CUSTOM STYLES AND HEADER
-# ============================================================
+# --------------------------------------------------
+# APPLY CUSTOM THEME
+# --------------------------------------------------
 
 apply_custom_styles()
+
+MODEL_NAMES = [
+
+    "Logistic Regression",
+    "Decision Tree",
+    "KNN",
+    "Gaussian Naive Bayes",
+    "SVM"
+]
+
+
+METRIC_NAMES = [
+
+    "Accuracy",
+    "AUC",
+    "Precision",
+    "Recall",
+    "F1 Score",
+    "MCC"
+]
+
+
+# --------------------------------------------------
+# LOAD METADATA
+# --------------------------------------------------
+
+metadata = load_metadata()
+
+FEATURE_COLUMNS = metadata["features"]
+
+TARGET_COLUMN = metadata["target_column"]
+
+
+# --------------------------------------------------
+# HEADER
+# --------------------------------------------------
+
 render_header()
 
 
-# ============================================================
-# 3. LOAD SAVED MODELS
-# ============================================================
+# --------------------------------------------------
+# LOAD TRAINED MODELS
+# --------------------------------------------------
 
 models = load_models()
 
+
 if not models:
+
     st.error(
-        "No trained models found. Check that all five .pkl "
-        "files are inside the model folder."
+        "No trained models were found. "
+        "Run `python train_models.py` first."
     )
+
     st.stop()
 
 
-# ============================================================
-# 4. SIDEBAR
-# ============================================================
+# --------------------------------------------------
+# LOAD DEFAULT DATASET
+# --------------------------------------------------
 
-st.sidebar.title("Online Shopping Prediction")
+try:
+
+    sample_dataset = load_default_dataset()
+
+except Exception:
+
+    sample_dataset = None
+
+
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
+
+st.sidebar.title("Purchase Prediction")
 
 st.sidebar.markdown(
-    "Upload a CSV file to evaluate the trained "
-    "machine learning models."
+    """
+    Upload a labelled CSV file to evaluate
+    the saved machine learning models.
+    """
 )
 
 st.sidebar.markdown("---")
@@ -90,172 +140,198 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Upload Dataset")
 
 uploaded_file = st.sidebar.file_uploader(
+
     "Upload your CSV file",
+
     type=["csv"]
 )
+
 
 st.sidebar.markdown(
     """
     **CSV Requirements**
 
-    - File format: CSV
-    - Must contain all 17 input features
-    - Target column can have any name
-    - Target values must be 0 or 1
-    - Must contain both target classes
+    - CSV format
+    - All 17 input features
+    - One target column
+    - Revenue values: True/False or 0/1
+    - Both target classes must be present
     """
 )
+
 
 st.sidebar.markdown("---")
 
 st.sidebar.subheader("Sample Dataset")
 
-try:
-    sample_dataset = create_sample_dataset()
+
+if sample_dataset is not None:
 
     st.sidebar.download_button(
+
         label="Download Sample Dataset",
-        data=sample_dataset.to_csv(index=False).encode("utf-8"),
-        file_name="online_shoppers_test_data.csv",
+
+        data=sample_dataset.to_csv(
+            index=False
+        ).encode("utf-8"),
+
+        file_name="test_data.csv",
+
         mime="text/csv",
+
         width="stretch"
     )
 
-except Exception as error:
-    st.sidebar.error(
-        f"Sample dataset unavailable: {error}"
-    )
 
-
-# ============================================================
-# 5. LOAD DEFAULT OR UPLOADED DATASET
-# ============================================================
+# --------------------------------------------------
+# DATASET SELECTION
+# --------------------------------------------------
 
 if uploaded_file is not None:
 
     try:
+
         data = pd.read_csv(uploaded_file)
+
         dataset_source = "Uploaded Dataset"
 
     except Exception as error:
+
         st.error(
             f"Unable to read uploaded CSV file: {error}"
         )
+
         st.stop()
 
-    # Identify possible target columns.
     target_options = [
-        col for col in data.columns
-        if col not in FEATURE_COLUMNS
+
+        column
+        for column in data.columns
+        if column not in FEATURE_COLUMNS
     ]
 
     if not target_options:
+
         st.error(
             "No target column found. "
-            "Include the actual target in your CSV."
+            "Include a Revenue/target column."
         )
+
         st.stop()
 
     default_index = (
+
         target_options.index(TARGET_COLUMN)
+
         if TARGET_COLUMN in target_options
+
         else 0
     )
 
     selected_target = st.sidebar.selectbox(
+
         "Select Target Column",
+
         options=target_options,
+
         index=default_index
     )
 
-    # Rename the selected target column to Revenue.
     if selected_target != TARGET_COLUMN:
 
-        if TARGET_COLUMN in data.columns:
-            st.error(
-                f"The CSV already contains a '{TARGET_COLUMN}' column. "
-                "Remove the extra target column or select Revenue."
-            )
-            st.stop()
-
         data = data.rename(
-            columns={selected_target: TARGET_COLUMN}
+
+            columns={
+                selected_target: TARGET_COLUMN
+            }
         )
 
 else:
 
     try:
+
         data = load_default_dataset()
+
         dataset_source = "Default Test Dataset"
 
     except Exception as error:
+
         st.error(
-            f"Unable to load default dataset: {error}"
+            f"Unable to load the default test dataset: {error}"
         )
+
+        st.info(
+            "Run `python train_models.py` "
+            "after placing the source CSV in this folder."
+        )
+
         st.stop()
 
 
-# ============================================================
-# 6. VALIDATE DATASET
-# ============================================================
+# --------------------------------------------------
+# VALIDATE DATASET
+# --------------------------------------------------
 
-if TARGET_COLUMN not in data.columns:
-    st.error(
-        f"Target column '{TARGET_COLUMN}' was not found."
-    )
-    st.stop()
+is_valid, validation_message, data = validate_dataset(
 
-try:
-    data[TARGET_COLUMN] = convert_target_values(
-        data[TARGET_COLUMN]
-    )
+    data,
 
-except Exception as error:
-    st.error(str(error))
-    st.stop()
+    FEATURE_COLUMNS,
 
+    TARGET_COLUMN
+)
 
-is_valid, validation_message = validate_dataset(data)
 
 if not is_valid:
+
     st.error(validation_message)
+
     st.stop()
 
-
-# Prepare input and target variables.
-X_test = data[FEATURE_COLUMNS].copy()
-y_test = data[TARGET_COLUMN].copy()
 
 st.success(
     f"{dataset_source} loaded successfully."
 )
 
 
-# ============================================================
-# 7. DATASET OVERVIEW AND CLASS DISTRIBUTION
-# ============================================================
+X_test = data[FEATURE_COLUMNS]
+
+y_test = convert_target_values(
+    data[TARGET_COLUMN]
+)
+
+
+# --------------------------------------------------
+# DATASET OVERVIEW
+# --------------------------------------------------
 
 st.markdown("## Dataset Overview")
 
+
 left_column, right_column = st.columns([1, 1])
 
-total_records = len(data)
-total_features = len(FEATURE_COLUMNS)
 
-no_purchase_count = int((y_test == 0).sum())
-purchase_count = int((y_test == 1).sum())
+total_records = len(data)
+
+purchase_count = int(
+    (y_test == 1).sum()
+)
+
+no_purchase_count = int(
+    (y_test == 0).sum()
+)
 
 
 with left_column:
 
     st.metric(
         "Total Records",
-        total_records
+        f"{total_records:,}"
     )
 
     st.metric(
         "Input Features",
-        total_features
+        len(FEATURE_COLUMNS)
     )
 
     st.markdown("### Dataset Preview")
@@ -268,36 +344,16 @@ with left_column:
 
 with right_column:
 
-    st.markdown("### Class Distribution")
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-
-    bars = ax.bar(
-        ["No Purchase", "Purchase"],
-        [no_purchase_count, purchase_count],
-        color=["#20A486", "#126B68"]
+    st.markdown(
+        "### Purchase Intention Distribution"
     )
 
-    ax.set_title("Class Distribution")
-    ax.set_ylabel("Number of Records")
-    ax.grid(axis="y", alpha=0.2)
+    fig = create_class_distribution_chart(
 
-    for bar in bars:
+        no_purchase_count,
 
-        height = bar.get_height()
-
-        ax.annotate(
-            str(int(height)),
-            (
-                bar.get_x() + bar.get_width() / 2,
-                height
-            ),
-            xytext=(0, 4),
-            textcoords="offset points",
-            ha="center"
-        )
-
-    plt.tight_layout()
+        purchase_count
+    )
 
     st.pyplot(
         fig,
@@ -307,25 +363,41 @@ with right_column:
     plt.close(fig)
 
 
-# ============================================================
-# 8. EVALUATE ALL MODELS
-# ============================================================
+# --------------------------------------------------
+# MODEL EVALUATION
+# --------------------------------------------------
+
+st.markdown("---")
+
+st.markdown("## Model Evaluation")
+
 
 all_results = {}
 
-for model_name, model in models.items():
+
+for model_name in MODEL_NAMES:
+
+    if model_name not in models:
+
+        continue
 
     try:
 
         predictions, scores, metrics = evaluate_model(
-            model,
+
+            models[model_name],
+
             X_test,
+
             y_test
         )
 
         all_results[model_name] = {
+
             "predictions": predictions,
+
             "scores": scores,
+
             "metrics": metrics
         }
 
@@ -337,103 +409,117 @@ for model_name, model in models.items():
 
 
 if not all_results:
-    st.error("No models could be evaluated.")
+
+    st.error(
+        "No models could be evaluated. "
+        "Check model files and feature preprocessing."
+    )
+
     st.stop()
 
 
-# ============================================================
-# 9. MODEL COMPARISON
-# ============================================================
+# --------------------------------------------------
+# MODEL COMPARISON TABLE
+# --------------------------------------------------
 
-st.markdown("---")
-st.markdown("## Model Comparison")
+st.markdown("### Model Comparison")
 
-comparison_data = {
-    name: result["metrics"]
-    for name, result in all_results.items()
-}
 
 comparison_df = pd.DataFrame(
-    comparison_data
+
+    {
+        name: result["metrics"]
+
+        for name, result in all_results.items()
+    }
+
 ).T
+
 
 comparison_df = comparison_df[METRIC_NAMES]
 
+
 st.dataframe(
+
     comparison_df.style.format(
         "{:.4f}",
         na_rep="N/A"
     ),
+
     width="stretch"
 )
 
 
-# ============================================================
-# 10. BEST MODEL PER METRIC
-# ============================================================
+# --------------------------------------------------
+# BEST MODEL PER METRIC
+# --------------------------------------------------
 
 st.markdown("### Best Model Per Metric")
 
+
 best_columns = st.columns(3)
+
 
 for index, metric in enumerate(METRIC_NAMES):
 
     valid_scores = comparison_df[metric].dropna()
 
     if valid_scores.empty:
+
         continue
 
     best_model = valid_scores.idxmax()
+
     best_score = valid_scores.max()
 
     with best_columns[index % 3]:
 
         st.metric(
-            label=f"Best {metric}",
-            value=best_model,
+
+            f"Best {metric}",
+
+            best_model,
+
             delta=f"{best_score:.4f}"
         )
 
 
-# ============================================================
-# 11. MODEL PERFORMANCE COMPARISON CHART
-# ============================================================
+# --------------------------------------------------
+# MODEL PERFORMANCE COMPARISON
+# --------------------------------------------------
 
 st.markdown("---")
-st.markdown("### Model Performance Comparison")
+
+st.markdown(
+    "### Model Performance Comparison"
+)
+
 
 selected_metric = st.selectbox(
+
     "Select Metric",
+
     METRIC_NAMES
 )
 
+
 chart_values = (
+
     comparison_df[selected_metric]
+
     .dropna()
+
     .sort_values()
 )
 
-fig, ax = plt.subplots(figsize=(9, 4))
 
-chart_values.plot(
-    kind="barh",
-    ax=ax,
-    color="#168574"
+fig = create_model_comparison_chart(
+
+    chart_values,
+
+    selected_metric
 )
 
-ax.set_xlabel(selected_metric)
-ax.set_ylabel("Machine Learning Models")
-
-ax.set_title(
-    f"Model Comparison - {selected_metric}"
-)
-
-ax.grid(
-    axis="x",
-    alpha=0.2
-)
-
-plt.tight_layout()
 
 st.pyplot(
     fig,
@@ -443,34 +529,42 @@ st.pyplot(
 plt.close(fig)
 
 
-# ============================================================
-# 12. INDIVIDUAL MODEL EVALUATION
-# ============================================================
+# --------------------------------------------------
+# INDIVIDUAL MODEL EVALUATION
+# --------------------------------------------------
 
 st.markdown("---")
-st.markdown("## Individual Model Evaluation")
+
+st.markdown(
+    "## Individual Model Evaluation"
+)
+
 
 selected_model = st.selectbox(
+
     "Select a Model",
+
     list(all_results.keys())
 )
 
+
 selected_result = all_results[selected_model]
 
+
 predictions = selected_result["predictions"]
+
 scores = selected_result["scores"]
+
 metrics = selected_result["metrics"]
 
-
-# ============================================================
-# 13. INDIVIDUAL MODEL METRICS
-# ============================================================
 
 st.markdown(
     f"### {selected_model} Performance"
 )
 
+
 metric_columns = st.columns(3)
+
 
 for index, metric in enumerate(METRIC_NAMES):
 
@@ -479,47 +573,33 @@ for index, metric in enumerate(METRIC_NAMES):
     with metric_columns[index % 3]:
 
         st.metric(
-            label=metric,
-            value=(
-                f"{value:.4f}"
-                if pd.notna(value)
-                else "N/A"
-            )
+
+            metric,
+
+            f"{value:.4f}"
+
+            if pd.notna(value)
+
+            else "N/A"
         )
 
 
-# ============================================================
-# 14. CONFUSION MATRIX
-# ============================================================
+# --------------------------------------------------
+# CONFUSION MATRIX
+# --------------------------------------------------
 
 st.markdown("---")
+
 st.markdown("### Confusion Matrix")
 
-cm = confusion_matrix(
+
+fig = create_confusion_matrix_chart(
+
     y_test,
-    predictions,
-    labels=[0, 1]
+
+    predictions
 )
 
-fig, ax = plt.subplots(figsize=(6, 4))
-
-display = ConfusionMatrixDisplay(
-    confusion_matrix=cm,
-    display_labels=["No Purchase", "Purchase"]
-)
-
-display.plot(
-    cmap="Greens",
-    values_format="d",
-    ax=ax,
-    colorbar=False
-)
-
-ax.set_title(
-    f"Confusion Matrix - {selected_model}"
-)
-
-plt.tight_layout()
 
 st.pyplot(
     fig,
@@ -529,78 +609,48 @@ st.pyplot(
 plt.close(fig)
 
 
-# ============================================================
-# 15. CLASSIFICATION REPORT
-# ============================================================
+# --------------------------------------------------
+# CLASSIFICATION REPORT
+# --------------------------------------------------
 
 st.markdown("### Classification Report")
 
-report = classification_report(
+
+report_df = create_classification_report(
+
     y_test,
-    predictions,
-    labels=[0, 1],
-    target_names=["No Purchase", "Purchase"],
-    output_dict=True,
-    zero_division=0
+
+    predictions
 )
 
-report_df = pd.DataFrame(
-    report
-).transpose()
 
 st.dataframe(
-    report_df.style.format("{:.4f}"),
+
+    report_df.style.format(
+        "{:.4f}",
+        na_rep="N/A"
+    ),
+
     width="stretch"
 )
 
 
-# ============================================================
-# 16. ROC CURVE COMPARISON
-# ============================================================
+# --------------------------------------------------
+# ROC CURVE COMPARISON
+# --------------------------------------------------
 
 st.markdown("---")
+
 st.markdown("## ROC Curve Comparison")
 
-fig, ax = plt.subplots(figsize=(8, 5))
 
-for model_name, result in all_results.items():
+fig = create_roc_curve_chart(
 
-    model_scores = result["scores"]
+    all_results,
 
-    if model_scores is None:
-        continue
-
-    fpr, tpr, _ = roc_curve(
-        y_test,
-        model_scores
-    )
-
-    auc_value = result["metrics"]["AUC"]
-
-    ax.plot(
-        fpr,
-        tpr,
-        label=f"{model_name} (AUC = {auc_value:.4f})"
-    )
-
-
-ax.plot(
-    [0, 1],
-    [0, 1],
-    linestyle="--",
-    color="gray",
-    label="Random Classifier"
+    y_test
 )
 
-ax.set_xlabel("False Positive Rate")
-ax.set_ylabel("True Positive Rate")
-
-ax.set_title("ROC Curve Comparison")
-
-ax.legend(loc="lower right")
-ax.grid(alpha=0.2)
-
-plt.tight_layout()
 
 st.pyplot(
     fig,
@@ -610,54 +660,36 @@ st.pyplot(
 plt.close(fig)
 
 
-# ============================================================
-# 17. DOWNLOAD RESULTS
-# ============================================================
+# --------------------------------------------------
+# DOWNLOAD RESULTS
+# --------------------------------------------------
 
 st.markdown("---")
+
 st.markdown("## Download Results")
 
 
-# Download model comparison results.
-comparison_csv = comparison_df.to_csv(
+csv_data = comparison_df.to_csv(
     float_format="%.4f"
 ).encode("utf-8")
 
+
 st.download_button(
-    label="Download Model Comparison Results",
-    data=comparison_csv,
-    file_name="online_shoppers_model_comparison.csv",
+
+    "Download Model Comparison Results",
+
+    data=csv_data,
+
+    file_name="model_comparison_results.csv",
+
     mime="text/csv",
+
     width="stretch"
 )
 
 
-# Download predictions for the selected model.
-prediction_df = data.copy()
-
-prediction_df["Predicted_Revenue"] = predictions
-
-prediction_df["Purchase_Prediction"] = np.where(
-    predictions == 1,
-    "Purchase",
-    "No Purchase"
-)
-
-prediction_csv = prediction_df.to_csv(
-    index=False
-).encode("utf-8")
-
-st.download_button(
-    label="Download Prediction Results",
-    data=prediction_csv,
-    file_name="online_shoppers_predictions.csv",
-    mime="text/csv",
-    width="stretch"
-)
-
-
-# ============================================================
-# 18. FOOTER
-# ============================================================
+# --------------------------------------------------
+# FOOTER
+# --------------------------------------------------
 
 render_footer()

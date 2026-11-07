@@ -1,2 +1,1 @@
-
-"""Utility modules for the Online Shoppers Prediction application."""
+"""Data and model utility functions."""
